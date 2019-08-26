@@ -8,8 +8,9 @@ import csv
 import numpy as np
 import operator
 import pickle
-
+import multiprocessing as mp
 from sklearn import metrics
+import time
 
 # SA Operators
 
@@ -78,7 +79,7 @@ def step(index,bands,length,maxlength,mutation_rate = 0.05):
                 mutateForStep(index,bands, mutation_rate = mutation_rate)
 
 
-def simulatedAnnealing(index, bands, pointSet,tMax = 5000,tMin = 1,cooling = 0.3, maxIterations = 10, MAXLENGTH = 10):
+def simulatedAnnealing(index,tMax = 5000,tMin = 1,cooling = 0.3, maxIterations = 10, MAXLENGTH = 10):
 
     currentIndex = copy.deepcopy(index)
     nextIndex = copy.deepcopy(index)
@@ -127,6 +128,61 @@ def simulatedAnnealing(index, bands, pointSet,tMax = 5000,tMin = 1,cooling = 0.3
     # print(bestIndex.fitness)
 
     return bestIndex
+
+def simulatedAnnealingParallel(inputs, tMax = 5000,tMin = 1,cooling = 0.3, maxIterations = 10, MAXLENGTH = 10):
+
+	# print("Annealing in Parallel")
+	index = inputs[0]
+	bands = inputs[1]
+	pointSet = inputs[2]
+
+	currentIndex = copy.deepcopy(index)
+	nextIndex = copy.deepcopy(index)
+	bestIndex = copy.deepcopy(index)
+
+	T = tMax;
+	while(T > tMin):
+
+	# print(T)
+		for i in range(maxIterations):
+			currentIndex.fitness,currentIndex.score,currentIndex.isLarger,currentIndex.isPointFive,currentIndex.isNotPointFive,currentIndex.lessThanTen,currentIndex.jmd = calculateFitness(currentIndex.index,bands,pointSet)
+			currentFitness = currentIndex.fitness
+			# print("Current",currentFitness)
+
+			nextIndex = copy.deepcopy(currentIndex)
+
+			step(nextIndex.index,bands,nextIndex.length,MAXLENGTH,mutation_rate = T/tMax)
+			# step(nextIndex.index,bands,nextIndex.length,MAXLENGTH,mutation_rate = 1.0)
+			nextIndex.length = nextIndex.count(nextIndex.index)
+			nextIndex.fitness,nextIndex.score,nextIndex.isLarger,nextIndex.isPointFive,nextIndex.isNotPointFive,nextIndex.lessThanTen,nextIndex.jmd = calculateFitness(nextIndex.index,bands,pointSet)
+			nextFitness = nextIndex.fitness
+
+			# print("Next",nextFitness)
+
+			deltaFitness = nextFitness - currentFitness
+			# print("Delta",deltaFitness)
+
+			if deltaFitness > 0:
+				currentIndex = copy.deepcopy(nextIndex)
+				if bestIndex.fitness < currentIndex.fitness:
+					bestIndex = copy.deepcopy(currentIndex)            
+
+			elif (math.exp(deltaFitness/T)) > random.random():
+		# print("BLAG")
+				currentIndex = copy.deepcopy(nextIndex)
+
+
+			T *= 1 - cooling
+
+	# print("Current Index")
+	# currentIndex.display()
+	# print(currentIndex.fitness)
+
+	# print("Best Index")
+	# bestIndex.display()
+	# print(bestIndex.fitness)
+
+	return bestIndex
 
 # GA Operators
 
@@ -369,6 +425,16 @@ def bamratatata(population):
 
     return population[index],population[index].fitness
 
+def getNthBest(population,N):
+
+    fitness = [individual.fitness for individual in population]
+    # print(fitness)
+    # index, value = max(enumerate(fitness), key=operator.itemgetter(1))  
+    population.sort(key=lambda x: x.fitness, reverse=True)
+
+    return population[:N]
+    
+
 
 def selectRoulette(population):
 
@@ -405,138 +471,267 @@ def selectRoulette(population):
     return population[selected]
 
 
+
+# Create a GA Class
+# Initialize GA object with BANDS and POINTSET objects
+
+
 # Start of Main program
+if __name__ == '__main__':
 
-# Initialize the bands
-bands = ["B1","B2","B3","B4","B5","B6","B7"]
-
-
-with open("../MemeSpinInput/Points_1123.csv") as f:
-
-    points = list(csv.reader(f))
-
-vegetationPoints = []
-nonvegetationPoints = []
-
-pointSet = {'1':[],'2':[],'3':[],'4':[],'5':[]}
+	# Initialize the bands
+	bands = ["B1","B2","B3","B4","B5","B6","B7"]
 
 
-for point in points[1:]:
-    # if point[0] == '1':
-        # vegetationPoints.append({"B1":float(point[1]),"B2":float(point[2]),"B3":float(point[3]),"B4":float(point[4]),"B5":float(point[5]),"B6":float(point[6]),"B7":float(point[7])})
-    # else:    
-        # nonvegetationPoints.append({"B1":float(point[1]),"B2":float(point[2]),"B3":float(point[3]),"B4":float(point[4]),"B5":float(point[5]),"B6":float(point[6]),"B7":float(point[7])})
-    pointSet[point[0]].append({"class": point[0] ,"B1":float(point[1]),"B2":float(point[2]),"B3":float(point[3]),"B4":float(point[4]),"B5":float(point[5]),"B6":float(point[6]),"B7":float(point[7])})
+	with open("../MemeSpinInput/Points_1123.csv") as f:
+
+	    points = list(csv.reader(f))
+
+	vegetationPoints = []
+	nonvegetationPoints = []
+
+	pointSet = {'1':[],'2':[],'3':[],'4':[],'5':[]}
 
 
-# print(pointSet['1'])
+	for point in points[1:]:
+
+	    pointSet[point[0]].append({"class": point[0] ,"B1":float(point[1]),"B2":float(point[2]),"B3":float(point[3]),"B4":float(point[4]),"B5":float(point[5]),"B6":float(point[6]),"B7":float(point[7])})
 
 
-index = SpectralIndex.SpectralIndex(bands);
-# print(calculateFitnessSilhouette(index.index,bands,pointSet))
-# index.fitness = calculateFitnessSilhouette2(index.index,bands,pointSet)
+	# INITIALIZE PARAMETERS
+	
+	numProcesses = 3
+	GIRLSGENERATIONS = 150
+	POPSIZE = 20
+	CROSSOVER_RATE = 0.9
+	MUTATION_RATE = 0.5
+	MAXLENGTH = 15
+	STAGNATION = 20;
 
-MAXLENGTH = 10
+	bestEver = ""
 
-# INITIALIZE GA PARAMETERS
+	# INITIALIZE POPULATION
 
-GIRLSGENERATIONS = 2000
-POPSIZE = 50
-CROSSOVER_RATE = 0.90
-MUTATION_RATE = 0.90
+	print("Initializing Population...")
+	population = []
 
+	averageFitnessInitialPopulation = 0;
 
-bestEver = ""
+	for p in range(POPSIZE):
+	    # print(p)
+	    index = SpectralIndex.SpectralIndex(bands);
+	    index.fitness,index.score,index.isLarger,index.isPointFive,index.isNotPointFive,index.lessThanTen,index.jmd = calculateFitness(index.index,bands,pointSet)
+	    index.normalizedFitness = 0
+	    averageFitnessInitialPopulation += index.fitness
+	    population.append(index)
+	    
 
-# INITIALIZE POPULATION
+	averageFitnessInitialPopulation /= POPSIZE;
 
-population = []
+	bestEver = population[0]
 
-for p in range(POPSIZE):
-    # print(p)
-    index = SpectralIndex.SpectralIndex(bands);
-    index.fitness,index.score,index.isLarger,index.isPointFive,index.isNotPointFive,index.lessThanTen,index.jmd = calculateFitness(index.index,bands,pointSet)
-    index.normalizedFitness = 0
-    population.append(index)
-    
-bestEver = population[0]
-
-# bestEver.pretty(bestEver.index,0);
-# print(bestEver.count(bestEver.index))
-
-
-# START OF GENETIC ALGORITHM
-
-
-for generation in range(GIRLSGENERATIONS):
-
-    print("Generation",generation)
-    newPopulation = []
-
-    # Humayo kayo at magpakarami
-
-    for i in range(int(POPSIZE/2)):
-
-        mommy = selectRoulette(population)
-        daddy = selectRoulette(population)
-
-        # Insert length constraint here
-
-        child1,child2 = basicCrossover(mommy,daddy,CROSSOVER_RATE)
-        mutate(child1.index,bands,child1.length,MAXLENGTH,mutation_rate = MUTATION_RATE)
-        mutate(child2.index,bands,child2.length,MAXLENGTH,mutation_rate = MUTATION_RATE)
-        
-        child1.length = child1.count(child1.index)
-        child2.length = child2.count(child2.index)
-
-        child1.fitness,child1.score,child1.isLarger,child1.isPointFive,child1.isNotPointFive,child1.lessThanTen,child1.jmd = calculateFitness(child1.index,bands,pointSet)
-        child2.fitness,child2.score,child2.isLarger,child2.isPointFive,child2.isNotPointFive,child2.lessThanTen,child2.jmd = calculateFitness(child2.index,bands,pointSet)
-        child1.normalizedFitness = 0
-        child2.normalizedFitness = 0
+	for individual in population:
+		print(individual.fitness)
 
 
-        newPopulation.append(child1)
-        newPopulation.append(child2) 
+	# print("SNAP")
+	# thanos = getNthBest(population,int(POPSIZE/2))
+
+	# for individual in thanos:
+	# 	print(individual.fitness)
 
 
-    population = copy.deepcopy(newPopulation)
-    # print(len(population))
-    
-    currentBest,currentBestFitness =  bamratatata(population)
-    # bamratatata(population)[0].display()
-    # print(bamratatata(population)[1])
-    print("Current Best:")
-    currentBest.display()
-    print(currentBestFitness)
-    print("==================================")
-
-    if currentBest.fitness > bestEver.fitness:
-
-        bestEver = currentBest
-
-    print("Best Ever:")
-    bestEver.display()
-    print(bestEver.fitness)
-    print("---------------------")
-    print("Silhouette Score:",bestEver.score)
-    print("Jeffries-Matusita Distance:",bestEver.jmd)
-    print("Is class mean larger?:",bestEver.isLarger)
-    print("Is class mean > 0.5?:",bestEver.isPointFive)
-    print("Is non class mean < 0.5:",bestEver.isNotPointFive)
-    print("Are all calculated values within [-1,1]?",bestEver.lessThanTen)
-    print("Index Length",bestEver.length)
-    print("==================================")    
+	print("Average Fitness:",averageFitnessInitialPopulation)
 
 
-# bestIndex,fitness = bamratatata(population)
+	# IMPROVE INITIAL POPULATION
 
-print("Best Ever Talaga:")
+	print("Improving Initial Population...")
 
-bestIndex = bestEver
+	t0 = time.time()
 
-bestIndex.display()
-print(bestIndex.fitness)
+	averageFitnessImprovedPopulation = 0;
 
-pickle.dump(bestIndex,open("../MemeSpinOutput/Vegetation_0823_Test1.index","wb"))
+	# print([bands]*50)
+
+	inputs = list(zip(population,[bands]*POPSIZE,[pointSet]*POPSIZE))
+
+	# print(inputs[0][2])
+
+	pool = mp.Pool(numProcesses)
+	population = pool.map(simulatedAnnealingParallel,inputs)
+	pool.close()
+	pool.join()
+
+
+
+	for i in range(POPSIZE):
+		# print(i)
+		# population[i] = simulatedAnnealing(population[i])
+		population[i].fitness,population[i].score,population[i].isLarger,population[i].isPointFive,population[i].isNotPointFive,population[i].lessThanTen,population[i].jmd = calculateFitness(population[i].index,bands,pointSet)
+		population[i].normalizedFitness = 0
+		averageFitnessImprovedPopulation += population[i].fitness
+
+	averageFitnessImprovedPopulation /= POPSIZE
+
+	print("Average Fitness:",averageFitnessImprovedPopulation)
+
+	t1 = time.time()
+
+	print("Running Time:",t1-t0)
+
+	stagnation = 0
+	currentBestFitness = 0
+	pastBestFitness = 0
+
+
+	# # START RECOMBINATION AND MUTATION
+
+
+	for generation in range(GIRLSGENERATIONS):
+		t0 = time.time()
+
+		print("Generation",generation+1)
+
+		recombinedPopulation = []
+		mutatedPopulation = []
+
+		# Recombination
+
+		for i in range(int(POPSIZE/2)): 
+
+			mommy = selectRoulette(population)
+			daddy = selectRoulette(population)
+
+			child1,child2 = basicCrossover(mommy,daddy,CROSSOVER_RATE)
+
+			# mutate(child1.index,bands,child1.length,MAXLENGTH,mutation_rate = MUTATION_RATE)
+			# mutate(child2.index,bands,child2.length,MAXLENGTH,mutation_rate = MUTATION_RATE)
+
+			child1.fitness,child1.score,child1.isLarger,child1.isPointFive,child1.isNotPointFive,child1.lessThanTen,child1.jmd = calculateFitness(child1.index,bands,pointSet)
+			child2.fitness,child2.score,child2.isLarger,child2.isPointFive,child2.isNotPointFive,child2.lessThanTen,child2.jmd = calculateFitness(child2.index,bands,pointSet)
+			child1.normalizedFitness = 0
+			child2.normalizedFitness = 0
+
+			recombinedPopulation.append(child1)
+			recombinedPopulation.append(child2)
+
+		inputs = list(zip(recombinedPopulation,[bands]*POPSIZE,[pointSet]*POPSIZE))
+
+		pool = mp.Pool(numProcesses)
+		recombinedPopulation = pool.map(simulatedAnnealingParallel,inputs)
+		pool.close()
+		pool.join()
+
+		# Mutation
+
+		for i in range(int(POPSIZE)): 
+
+			mutate(recombinedPopulation[i].index,bands,recombinedPopulation[i].length,MAXLENGTH,mutation_rate = MUTATION_RATE)
+			
+			recombinedPopulation[i].fitness,recombinedPopulation[i].score,recombinedPopulation[i].isLarger,recombinedPopulation[i].isPointFive,recombinedPopulation[i].isNotPointFive,recombinedPopulation[i].lessThanTen,recombinedPopulation[i].jmd = calculateFitness(recombinedPopulation[i].index,bands,pointSet)
+			recombinedPopulation[i].normalizedFitness = 0
+			
+			mutatedPopulation.append(recombinedPopulation[i])
+			
+		inputs = list(zip(mutatedPopulation,[bands]*POPSIZE,[pointSet]*POPSIZE))
+
+		pool = mp.Pool(numProcesses)
+		mutatedPopulation = pool.map(simulatedAnnealingParallel,inputs)
+		pool.close()
+		pool.join()	
+
+		
+
+		population = copy.deepcopy(mutatedPopulation)
+		currentBest,currentBestFitness =  bamratatata(population)
+
+		print("Current Best:")
+		currentBest.display()
+		print(currentBestFitness)
+
+		print("==================================")
+
+		if currentBest.fitness > bestEver.fitness:
+
+		    bestEver = copy.deepcopy(currentBest)
+
+		print("Best Ever:")
+		bestEver.display()
+		print(bestEver.fitness)
+		print("---------------------")
+		print("Silhouette Score:",bestEver.score)
+		print("Jeffries-Matusita Distance:",bestEver.jmd)
+		print("Is class mean larger?:",bestEver.isLarger)
+		print("Is class mean > 0.5?:",bestEver.isPointFive)
+		print("Is non class mean < 0.5:",bestEver.isNotPointFive)
+		print("Are all calculated values within [-1,1]?",bestEver.lessThanTen)
+		print("Index Length",bestEver.length)
+		print("==================================")
+
+		if pastBestFitness == bestEver.fitness: 
+			stagnation +=1
+
+		if stagnation == STAGNATION:
+			print("Population is stagnant. Restarting Population...")
+			# Restart the Population
+
+			thanos = getNthBest(population,int(POPSIZE/2))
+
+			gratefulUniverse = []	
+
+			for p in range(int(POPSIZE/2)):
+				print(p)
+				index = SpectralIndex.SpectralIndex(bands);
+				index.fitness,index.score,index.isLarger,index.isPointFive,index.isNotPointFive,index.lessThanTen,index.jmd = calculateFitness(index.index,bands,pointSet)
+				index.normalizedFitness = 0
+				gratefulUniverse.append(index)
+
+
+			inputs = list(zip(gratefulUniverse,[bands]*int(POPSIZE/2),[pointSet]*int(POPSIZE/2)))
+
+
+			pool = mp.Pool(numProcesses)
+			gratefulUniverse = pool.map(simulatedAnnealingParallel,inputs)
+			pool.close()
+			pool.join()
+
+			for i in range(int(POPSIZE/2)):
+				gratefulUniverse[i].fitness,gratefulUniverse[i].score,gratefulUniverse[i].isLarger,gratefulUniverse[i].isPointFive,gratefulUniverse[i].isNotPointFive,gratefulUniverse[i].lessThanTen,gratefulUniverse[i].jmd = calculateFitness(gratefulUniverse[i].index,bands,pointSet)
+				gratefulUniverse[i].normalizedFitness = 0
+			
+
+			population = thanos + gratefulUniverse	
+
+			print(len(population))
+
+			stagnation = 0
+
+		pastBestFitness = bestEver.fitness
+
+
+		t1 = time.time()
+		print("Running Time:",t1-t0)
+
+
+		
+	pickle.dump(bestEver,open("../MemeSpinOutput/Vegetation_Meme_0825_Test1.index","wb"))
+
+
+
+		# For flexing
+		# for i in range(POPSIZE):
+
+		# 	averageFitnessImprovedPopulation += recombinedPopulation[i].fitness
+
+		# averageFitnessImprovedPopulation /= POPSIZE 
+		# print("Average Fitness of Recombined Population")
+		# print(averageFitnessImprovedPopulation)  
+
+
+
+
+
+
 
 

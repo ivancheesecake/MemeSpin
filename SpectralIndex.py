@@ -6,7 +6,7 @@ class SpectralIndex:
 
 	# Initialize Random Spectral Index
 
-	def __init__(self, bands, coefficient_probability = 0.2, unary_operator_probability = 0.2):
+	def __init__(self, bands, coefficient_probability = 0.1, unary_operator_probability = 0.1):
 
 		self.operators = ["+","-","/","*"]
 		self.unary_operators = ["-","sqrt","log"]
@@ -111,6 +111,7 @@ class SpectralIndex:
 
 		self.inorderTraversal(self.index)
 		print("")
+
 
 
 

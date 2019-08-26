@@ -54,16 +54,16 @@ def evaluate(root,values):
             return left_sum / right_sum
 
 
-index = pickle.load(open("Open_0819_Test2.index","rb"))
+index = pickle.load(open("../MemeSpinOutput/Vegetation_Meme_0823_Test1.index","rb"))
 print("VEG!")
 
-B1 = io.imread("input/B1.tif")
-B2 = io.imread("input/B2.tif")
-B3 = io.imread("input/B3.tif")
-B4 = io.imread("input/B4.tif")
-B5 = io.imread("input/B5.tif")
-B6 = io.imread("input/B6.tif")
-B7 = io.imread("input/B7.tif")
+B1 = io.imread("../MemeSpinInput/B1.tif")
+B2 = io.imread("../MemeSpinInput/B2.tif")
+B3 = io.imread("../MemeSpinInput/B3.tif")
+B4 = io.imread("../MemeSpinInput/B4.tif")
+B5 = io.imread("../MemeSpinInput/B5.tif")
+B6 = io.imread("../MemeSpinInput/B6.tif")
+B7 = io.imread("../MemeSpinInput/B7.tif")
 
 output = copy.deepcopy(B1)
 
@@ -124,7 +124,7 @@ for y in range(len(B1)):
 
 
 
-io.imsave("Open_0819_Test2.tif",output)
+io.imsave("../MemeSpinOutput/Vegetation_Meme_0823_Test2.tif",output)
 
 print(index)
 
